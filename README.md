@@ -18,8 +18,7 @@ read host-measured energy over a 9p share and attest remotely.
 
 ## Build
 
-First generate the placeholder certs the enclaves embed at build time (replace with your own for a real deployment):
-
+First generate the placeholder certs 
 ```bash
 bash scripts/gen_certs.sh
 ```
@@ -90,10 +89,20 @@ python3 scripts/verify_redis_gpu.py --all       # GPU chain
 python3 scripts/anchor_verify.py <tenant>       # verify the enclave-signed chain-head anchor
 ```
 
+## Benchmark
+
+Install Phoronix Test Suite and run the CPU/storage/network campaign (re-run with a different
+identifier to compare, e.g. `host-secure` vs `host-insecure`):
+
+```bash
+scripts/run_phoronix.sh host-secure vpma-bench
+phoronix-test-suite show-result vpma-bench
+```
+
 ## Layout
 
 - `src/` host collector + exporters, `sgx/` host enclave, `sgx_vm/` guest enclave
 - `verified/` Verus-verified core, `verified-ffi/` C-ABI shim for the offline auditors
-- `scripts/` registration, attack demo, power-overhead, offline verification
+- `scripts/` registration, benchmark, attack demo, power-overhead, offline verification
 - `sapic/` Tamarin formal proofs
 - `*.c` eBPF file-access guards + memory-protection probes
