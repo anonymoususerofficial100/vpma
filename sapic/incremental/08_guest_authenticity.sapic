@@ -1,0 +1,79 @@
+theory VPMA_08_GuestAuthenticity
+begin
+
+builtins: hashing, signing
+functions: hmac/2
+
+let Provisioning =
+    new kchain;
+    insert 'k_chain', kchain
+
+let Exporter =
+    !( in(<'topology', g>);
+       lookup 'k_chain' as kchain in
+         new m;
+         let eg = <'share', g, m> in
+         event HostExported(g, eg, hmac(kchain, <g, eg>));
+         out(<'guest_record', <g, eg>, hmac(kchain, <g, eg>)>)
+       else 0 )
+
+let VTPMProvision(plat) =
+    new aik;
+    insert <'aik_priv', plat>, aik;
+    insert <'aik_pub_pinned', plat>, pk(aik);
+    insert <'pcr', plat>, 'zero';
+    out(<'aik_pub', plat, pk(aik)>)
+
+let VTPMQuote(plat) =
+    !( in(<'quote_req', =plat, nonce>);
+       lookup <'aik_priv', plat> as aik in
+       lookup <'pcr', plat> as v in
+         let q = <'quote', plat, v, nonce> in
+         out(<q, sign(q, aik)>)
+       else 0
+       else 0 )
+
+let GuestAttestation(gself) =
+    lookup <'aik_pub_pinned', gself> as gapk in
+      new ng;
+      out(<'quote_req', gself, ng>);
+      in(<<'quote', gq, w, nq>, gsig>);
+      if gq = gself then
+      if nq = ng then
+      if verify(gsig, <'quote', gq, w, nq>, gapk) = true then
+        event GuestAttested(gself, w);
+        insert <'gattested', gself>, w
+    else 0
+
+let GuestVerification(gself) =
+    !( in(<'guest_record', <gr, eg>, mac>);
+       if gr = gself then
+       lookup <'gattested', gself> as att in
+       lookup 'k_chain' as kchain in
+         if mac = hmac(kchain, <gr, eg>) then
+           event GuestAccepted(gself, eg)
+       else 0
+       else 0 )
+
+let GuestSpawn =
+    new g;
+    out(<'guest_id', g>);
+    ( VTPMProvision(g) | VTPMQuote(g)
+    | GuestAttestation(g) | GuestVerification(g) )
+
+process:
+    Provisioning | Exporter | !GuestSpawn
+
+lemma guest_authenticity:
+  "All g eg #i.
+     GuestAccepted(g, eg) @ #i
+     ==> Ex w #j. GuestAttested(g, w) @ #j & #j < #i"
+
+lemma exec_attested_then_accepted:
+  exists-trace
+  "Ex g w eg #j #i.
+       GuestAttested(g, w) @ #j
+     & GuestAccepted(g, eg) @ #i
+     & #j < #i"
+
+end

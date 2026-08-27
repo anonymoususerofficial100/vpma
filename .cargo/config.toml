@@ -1,0 +1,17 @@
+[build]
+rustdocflags = ["--document-private-items"]
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang-18"
+rustflags = [
+    "-Crelocation-model=pic",
+    "-Clinker=clang-18",
+    "-Clink-arg=-flto=thin",
+    "-Clink-arg=-fsanitize=cfi",
+    "-Clink-arg=-fvisibility=hidden",
+    "-Clink-arg=-fno-sanitize-trap=cfi",
+    "-Clink-arg=-fstack-protector-strong",
+    "-Clink-arg=-Wl,-z,relro,-z,now",
+    "-Clink-arg=-Wl,-z,noexecstack",
+    "-Clink-arg=-fstack-clash-protection",
+]

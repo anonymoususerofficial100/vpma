@@ -1,0 +1,38 @@
+theory VPMA_12_AnchorOriginPermissive
+begin
+
+builtins: signing
+
+restriction SetupOnce:
+    "All #i #j. Setup() @ #i & Setup() @ #j ==> #i = #j"
+
+restriction Equality:
+    "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+rule Setup:
+    [ Fr(~sk) ]
+  --[ Setup() ]->
+    [ !AnchorSK(~sk), !AnchorPK(pk(~sk)) ]
+
+rule Seal:
+    let a = <'anchor', n, <'s', n>, x> in
+    [ !AnchorSK(sk), In(<n, x>) ]
+  --[ SealedAnchor(a) ]->
+    [ Out(<a, sign(a, sk)>) ]
+
+rule Audit:
+    [ !AnchorPK(apk), In(<<'anchor', n, nx, x>, sig>) ]
+  --[ Eq(verify(sig, <'anchor', n, nx, x>, apk), true)
+    , AcceptedAnchor(<'anchor', n, nx, x>) ]->
+    [ ]
+
+lemma anchor_origin_term:
+  "All a #i.
+     AcceptedAnchor(a) @ #i
+     ==> Ex #j. SealedAnchor(a) @ #j & #j < #i"
+
+lemma exec_accepted:
+  exists-trace
+  "Ex a #i. AcceptedAnchor(a) @ #i"
+
+end

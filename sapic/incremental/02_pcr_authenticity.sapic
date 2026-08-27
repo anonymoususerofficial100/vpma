@@ -1,0 +1,59 @@
+theory VPMA_02_PCRAuthenticity
+begin
+
+builtins: hashing, signing
+
+let TPMProvision =
+    new aik;
+    insert 'aik_priv', aik;
+    insert 'aik_pub_pinned', pk(aik);
+    insert 'pcr10', 'zero';
+    event TPMReady(pk(aik));
+    out(<'aik_pub', pk(aik)>)
+
+let TPMExtend =
+    !( in(<'extend', digest>);
+       lookup 'pcr10' as cur in
+         let nxt = h(<cur, digest>) in
+
+         event PCRExtend(cur, digest, nxt);
+         insert 'pcr10', nxt
+       else 0 )
+
+let TPMQuote =
+    !( in(<'quote_req', nonce>);
+       lookup 'aik_priv' as aik in
+       lookup 'pcr10' as v in
+         let quoted = <'quote', v, nonce> in
+         event TPMQuoted(v, nonce);
+         out(<quoted, sign(quoted, aik)>)
+       else 0
+       else 0 )
+
+let Verifier =
+    !( lookup 'aik_pub_pinned' as apk in
+         new n;
+         out(<'quote_req', n>);
+         in(<<'quote', v, nr>, sig>);
+         if nr = n then
+         if verify(sig, <'quote', v, nr>, apk) = true then
+           event QuoteAccepted(v, nr)
+       else 0 )
+
+process:
+    TPMProvision | TPMExtend | TPMQuote | Verifier
+
+lemma pcr_value_authentic:
+  "All v n #i.
+     QuoteAccepted(v, n) @ #i
+     ==> (v = 'zero')
+       | (Ex cur d #j. PCRExtend(cur, d, v) @ #j & #j < #i)"
+
+lemma exec_pcr_extended_then_quoted:
+  exists-trace
+  "Ex cur d v n #j #i.
+       PCRExtend(cur, d, v) @ #j
+     & QuoteAccepted(v, n) @ #i
+     & #j < #i"
+
+end

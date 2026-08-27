@@ -1,0 +1,64 @@
+theory VPMA_09_TeeAuthenticity
+begin
+
+builtins: hashing, signing
+functions: mroot/1
+
+let Provisioning =
+    insert 'batch',  'empty';
+    insert 'croot',  'zero';
+    insert 'acroot', 'zero'
+
+let Accumulate =
+    !( in(<'record', r>);
+       lookup 'batch' as bt in
+         insert 'batch', <bt, r>
+       else 0 )
+
+let EnclaveKeys =
+    new msk;
+    insert 'anchor_sk',        msk;
+    insert 'anchor_pk_pinned', pk(msk);
+    out(<'anchor_pk', pk(msk)>)
+
+let EnclaveSeal =
+    !( in('seal_block');
+       lookup 'anchor_sk' as sk in
+       lookup 'batch'     as bt in
+       lookup 'croot'     as cprev in
+         let rj = mroot(bt) in
+         let cj = h(<cprev, rj>) in
+         let a  = <'anchor', rj, cj> in
+         event BlockSealed(a);
+         insert 'croot', cj;
+         insert 'batch', 'empty';
+         out(<a, sign(a, sk)>)
+       else 0
+       else 0
+       else 0 )
+
+let AuditorVerify =
+    !( in(<<'anchor', rj, cj>, sig>);
+       lookup 'anchor_pk_pinned' as apk in
+         if verify(sig, <'anchor', rj, cj>, apk) = true then
+           lookup 'acroot' as acprev in
+             if cj = h(<acprev, rj>) then
+               event AuditVerified(<'anchor', rj, cj>);
+               insert 'acroot', cj
+             else 0
+           else 0
+       else 0 )
+
+process:
+    Provisioning | EnclaveKeys | Accumulate | EnclaveSeal | AuditorVerify
+
+lemma tee_authenticity:
+  "All a #i.
+     AuditVerified(a) @ #i
+     ==> Ex #j. BlockSealed(a) @ #j & #j < #i"
+
+lemma exec_audited:
+  exists-trace
+  "Ex a #i. AuditVerified(a) @ #i"
+
+end

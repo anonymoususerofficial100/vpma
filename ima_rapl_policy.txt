@@ -1,0 +1,11 @@
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/intel-rapl:0/energy_uj
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/intel-rapl:1/energy_uj
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/intel-rapl:0/intel-rapl:0:0/energy_uj
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/intel-rapl:0/intel-rapl:0:1/energy_uj
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/intel-rapl:0/intel-rapl:0:2/energy_uj
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/intel-rapl:0/intel-rapl:0:3/energy_uj
+
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/intel-rapl:0/name
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/intel-rapl:1/name
+
+measure func=FILE_CHECK mask=^MAY_READ path=/sys/class/powercap/

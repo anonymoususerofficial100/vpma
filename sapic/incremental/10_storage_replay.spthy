@@ -1,0 +1,52 @@
+theory VPMA_10_StorageReplay
+begin
+
+builtins: signing
+
+restriction SetupOnce:
+    "All #i #j. Setup() @ #i & Setup() @ #j ==> #i = #j"
+
+restriction Equality:
+    "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+rule Setup:
+    [ Fr(~sk) ]
+  --[ Setup() ]->
+    [ !AnchorSK(~sk), !AnchorPK(pk(~sk)), EPos('zero'), APos('zero') ]
+
+rule BlockIssue:
+    let next = <'s', n>
+        a    = <'anchor', next>
+    in
+    [ EPos(n), !AnchorSK(sk) ]
+  --[ BlockIssued(n, next) ]->
+    [ EPos(next), Out(<a, sign(a, sk)>) ]
+
+rule AuditAccept:
+    [ APos(prev), In(<<'anchor', bn>, sig>), !AnchorPK(apk) ]
+  --[ Eq(verify(sig, <'anchor', bn>, apk), true)
+    , Eq(bn, <'s', prev>)
+    , AuditAccepted(prev, bn) ]->
+    [ APos(bn) ]
+
+lemma position_consumed_once [use_induction, reuse]:
+  "All p b1 b2 #i #j.
+       AuditAccepted(p, b1) @ #i
+     & AuditAccepted(p, b2) @ #j
+     ==> #i = #j"
+
+lemma storage_replay_protection:
+  "All p1 p2 bn #i #j.
+       AuditAccepted(p1, bn) @ #i
+     & AuditAccepted(p2, bn) @ #j
+     ==> #i = #j"
+
+lemma exec_two_blocks_accepted:
+  exists-trace
+  "Ex p1 p2 b1 b2 #i #j.
+       AuditAccepted(p1, b1) @ #i
+     & AuditAccepted(p2, b2) @ #j
+     & #i < #j
+     & not(b1 = b2)"
+
+end

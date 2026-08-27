@@ -1,0 +1,48 @@
+theory VPMA_11_StorageRollback
+begin
+
+builtins: hashing, signing
+
+restriction SetupOnce:
+    "All #i #j. Setup() @ #i & Setup() @ #j ==> #i = #j"
+
+restriction Equality:
+    "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+rule Setup:
+    [ Fr(~sk) ]
+  --[ Setup(), AnchorKey(~sk) ]->
+    [ !AnchorSK(~sk), !AnchorPK(pk(~sk)), EState('zero'), AState('zero') ]
+
+rule Seal:
+    let c = h(<p, x>)
+        a = <'anchor', p, x, c>
+    in
+    [ EState(p), !AnchorSK(sk), In(x) ]
+  --[ BlockSealed(p, x, c) ]->
+    [ EState(c), Out(<a, sign(a, sk)>) ]
+
+rule Audit:
+    [ AState(p), !AnchorPK(apk), In(<<'anchor', p, x, c>, sig>) ]
+  --[ Eq(verify(sig, <'anchor', p, x, c>, apk), true)
+    , Eq(c, h(<p, x>))
+    , AuditAccepted(p, x, c)
+    , AuditAdvanced(p, c) ]->
+    [ AState(c) ]
+
+lemma rollback_protection:
+  "All p x1 c x2 d #i #j.
+       AuditAccepted(p, x1, c) @ #i
+     & AuditAccepted(c, x2, d) @ #j
+     & #i < #j
+     ==> not(d = p)"
+
+lemma exec_three_checkpoints:
+  exists-trace
+  "Ex p0 p1 p2 p3 #i #j #k.
+       AuditAdvanced(p0, p1) @ #i
+     & AuditAdvanced(p1, p2) @ #j
+     & AuditAdvanced(p2, p3) @ #k
+     & #i < #j & #j < #k"
+
+end

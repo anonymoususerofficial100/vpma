@@ -1,0 +1,13 @@
+[package]
+name = "vpma-verified-ffi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vpma-verified = { path = "../verified" }
+sgx_vm = { path = "../sgx_vm" }
+
+[lib]
+name = "vpma_ffi"
+path = "src/lib.rs"
+crate-type = ["cdylib"]

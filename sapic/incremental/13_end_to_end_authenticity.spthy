@@ -1,0 +1,103 @@
+theory VPMA_13_EndToEndAuthenticity
+begin
+
+builtins: hashing, signing
+functions: uhash/2, hmac/2
+
+restriction SetupOnce:
+    "All #i #j. Setup() @ #i & Setup() @ #j ==> #i = #j"
+
+restriction Equality:
+    "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+rule Setup:
+    [ Fr(~ktag), Fr(~kchain), Fr(~ska) ]
+  --[ Setup() ]->
+    [ !TagKey(~ktag), !ChainKey(~kchain)
+    , !AnchorSK(~ska), !AnchorPK(pk(~ska))
+    , EPos('zero')
+    , Out(pk(~ska)) ]
+
+rule Sense:
+    [ Fr(~m), !TagKey(kt) ]
+  --[ MeasurementGenerated(~m) ]->
+    [ Out(<~m, uhash(kt, ~m)>) ]
+
+rule Ingest:
+    let rec = <g, m> in
+    [ In(<m, t>), In(g), !TagKey(kt), !ChainKey(kc) ]
+  --[ Eq(t, uhash(kt, m))
+    , TagAccepted(m)
+    , HostExported(g, m) ]->
+    [ Pending(g, m)
+    , Out(<rec, hmac(kc, rec)>) ]
+
+rule GuestAccept:
+    let rec = <g, m> in
+    [ In(<rec, mac>), !ChainKey(kc) ]
+  --[ Eq(mac, hmac(kc, rec))
+    , GuestAccepted(g, m) ]->
+    [ ]
+
+rule Seal:
+    let bn = <'s', n>
+        a  = <'anchor', bn, m>
+    in
+    [ Pending(g, m), EPos(n), !AnchorSK(sk) ]
+  --[ BlockSealed(bn, m) ]->
+    [ EPos(bn)
+    , Out(<a, sign(a, sk)>) ]
+
+rule Audit:
+    [ In(<<'anchor', bn, m>, sig>), !AnchorPK(apk) ]
+  --[ Eq(verify(sig, <'anchor', bn, m>, apk), true)
+    , AuditVerified(bn, m) ]->
+    [ ]
+
+lemma audit_implies_sealed [reuse]:
+  "All bn m #i.
+     AuditVerified(bn, m) @ #i
+     ==> Ex #j. BlockSealed(bn, m) @ #j & #j < #i"
+
+lemma sealed_implies_tagged [reuse]:
+  "All bn m #i.
+     BlockSealed(bn, m) @ #i
+     ==> Ex #j. TagAccepted(m) @ #j & #j < #i"
+
+lemma tagged_implies_generated [reuse]:
+  "All m #i.
+     TagAccepted(m) @ #i
+     ==> Ex #j. MeasurementGenerated(m) @ #j & #j < #i"
+
+lemma guest_implies_tagged [reuse]:
+  "All g m #i.
+     GuestAccepted(g, m) @ #i
+     ==> Ex #j. TagAccepted(m) @ #j & #j < #i"
+
+lemma end_to_end_authenticity:
+  "All bn m #i.
+     AuditVerified(bn, m) @ #i
+     ==> Ex #j. MeasurementGenerated(m) @ #j & #j < #i"
+
+lemma guest_provenance:
+  "All g m #i.
+     GuestAccepted(g, m) @ #i
+     ==> Ex #j. MeasurementGenerated(m) @ #j & #j < #i"
+
+lemma exec_end_to_end:
+  exists-trace
+  "Ex bn m #i #j.
+       MeasurementGenerated(m) @ #i
+     & AuditVerified(bn, m) @ #j
+     & #i < #j"
+
+lemma exec_full_path:
+  exists-trace
+  "Ex bn m #a #b #c #d.
+       MeasurementGenerated(m) @ #a
+     & TagAccepted(m) @ #b
+     & BlockSealed(bn, m) @ #c
+     & AuditVerified(bn, m) @ #d
+     & #a < #b & #b < #c & #c < #d"
+
+end

@@ -1,0 +1,31 @@
+[Unit]
+Description=Secure Scaphandre Energy Monitor with TPM/IMA Attestation
+Documentation=https://github.com/hubblo-org/scaphandre
+After=network.target tpm2-abrmd.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/local/bin
+
+ExecStartPre=/usr/local/bin/verify_tpm.sh
+
+ExecStart=/usr/local/bin/scaphandre sgx-qemu
+
+Restart=on-failure
+RestartSec=10
+
+NoNewPrivileges=false
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/scaphandre
+
+DeviceAllow=/dev/tpm0 rw
+DeviceAllow=/dev/tpmrm0 rw
+
+AmbientCapabilities=CAP_SYS_RAWIO CAP_SYS_ADMIN
+CapabilityBoundingSet=CAP_SYS_RAWIO CAP_SYS_ADMIN
+
+[Install]
+WantedBy=multi-user.target

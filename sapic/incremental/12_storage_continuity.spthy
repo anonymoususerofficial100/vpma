@@ -1,0 +1,57 @@
+theory VPMA_12_StorageContinuity
+begin
+
+builtins: signing
+
+restriction SetupOnce:
+    "All #i #j. Setup() @ #i & Setup() @ #j ==> #i = #j"
+
+restriction Equality:
+    "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+rule Setup:
+    [ Fr(~sk) ]
+  --[ Setup() ]->
+    [ !AnchorSK(~sk), !AnchorPK(pk(~sk)), EPos('zero'), APos('zero') ]
+
+rule Seal:
+    let next = <'s', n>
+        a    = <'anchor', n, next, x>
+    in
+    [ EPos(n), !AnchorSK(sk), In(x) ]
+  --[ BlockSealed(n, next, x), SealedAnchor(a) ]->
+    [ EPos(next), Out(<a, sign(a, sk)>) ]
+
+rule Audit:
+    [ APos(n), !AnchorPK(apk), In(<<'anchor', n, nx, x>, sig>) ]
+  --[ Eq(verify(sig, <'anchor', n, nx, x>, apk), true)
+    , Eq(nx, <'s', n>)
+    , AuditAdvanced(n, nx, x)
+    , AcceptedAnchor(<'anchor', n, nx, x>)
+    , AuditStep(n, nx) ]->
+    [ APos(nx) ]
+
+lemma storage_continuity:
+  "All n next x #i.
+     AuditAdvanced(n, next, x) @ #i
+     ==> next = <'s', n>"
+
+lemma anchor_origin_term [reuse]:
+  "All a #i.
+     AcceptedAnchor(a) @ #i
+     ==> Ex #j. SealedAnchor(a) @ #j & #j < #i"
+
+lemma accepted_successor_was_sealed:
+  "All n next x #i.
+     AuditAdvanced(n, next, x) @ #i
+     ==> Ex #j. BlockSealed(n, next, x) @ #j & #j < #i"
+
+lemma exec_three_blocks_continuous:
+  exists-trace
+  "Ex n0 n1 n2 n3 #i #j #k.
+       AuditStep(n0, n1) @ #i
+     & AuditStep(n1, n2) @ #j
+     & AuditStep(n2, n3) @ #k
+     & #i < #j & #j < #k"
+
+end

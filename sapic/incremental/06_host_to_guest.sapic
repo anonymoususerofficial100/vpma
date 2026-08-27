@@ -1,0 +1,156 @@
+theory VPMA_06_HostToGuest
+begin
+
+builtins: hashing, signing
+
+functions: uhash/2,
+           hmac/2
+
+restriction OnlyOnce:
+    "All tag #i #j. OnlyOnce(tag) @ #i & OnlyOnce(tag) @ #j ==> #i = #j"
+
+let Provisioning =
+    new binGood;
+    new ktag;
+    new kchain;
+    insert 'bin_good', binGood;
+    insert 'k_tag', ktag;
+    insert 'k_chain', kchain;
+    event SecretKey('tag', ktag);
+    event SecretKey('chain', kchain);
+    out(<'endorsed_build', h(binGood)>)
+
+let TPMProvision =
+    new aik;
+    insert 'aik_priv', aik;
+    insert 'aik_pub_pinned', pk(aik);
+    insert 'pcr10', 'zero';
+    out(<'aik_pub', pk(aik)>)
+
+let TPMExtend =
+    !( in(<'extend', digest>);
+       lookup 'pcr10' as cur in
+         let nxt = h(<cur, digest>) in
+         event PCRExtend(cur, digest, nxt);
+         insert 'pcr10', nxt
+       else 0 )
+
+let TPMQuote =
+    !( in(<'quote_req', nonce>);
+       lookup 'aik_priv' as aik in
+       lookup 'pcr10' as v in
+         let quoted = <'quote', v, nonce> in
+         event TPMQuoted(v, nonce);
+         out(<quoted, sign(quoted, aik)>)
+       else 0
+       else 0 )
+
+let HostBoot =
+    lookup 'bin_good' as b in
+      let mb = h(b) in
+      out(<'extend', mb>)
+    else 0
+
+let IMALogService =
+    !( in('ima_log_req');
+       lookup 'bin_good' as b in
+         out(<'ima_log', h(b)>)
+       else 0 )
+
+let ReferenceRegister =
+    lookup 'bin_good' as b in
+      let expected = h(<'zero', h(b)>) in
+      event OnlyOnce('register');
+      event ReferenceStateFixed(expected, h(b));
+      insert 'ref_state', <expected, h(b)>
+    else 0
+
+let EnclaveAdmission =
+    lookup 'aik_pub_pinned' as apk in
+      new nE;
+      out(<'quote_req', nE>);
+      in(<<'quote', v, nr>, sig>);
+      if nr = nE then
+      if verify(sig, <'quote', v, nr>, apk) = true then
+        out('ima_log_req');
+        in(<'ima_log', logb>);
+        if h(<'zero', logb>) = v then
+          lookup 'ref_state' as st in
+            if <v, logb> = st then
+              event BootAdmitted(v, logb);
+              insert 'admitted', <v, logb>
+            else 0
+          else 0
+    else 0
+
+let eBPFTag =
+    !( lookup 'k_tag' as k in
+         new m;
+         let t = uhash(k, m) in
+         event MeasurementGenerated(m, t);
+         out(<'measurement', m, t>)
+       else 0 )
+
+let MeasurementCollector =
+    !( in(<'measurement', m, t>);
+       out(<'collected', m, t>) )
+
+let DataExporterRelay =
+    !( in(<'collected', m, t>);
+       out(<'exported', m, t>) )
+
+let EnclaveIngest =
+    !( in(<'exported', m, t>);
+       lookup 'admitted' as adm in
+       lookup 'k_tag'    as ktag in
+       lookup 'k_chain'  as kchain in
+         if t = uhash(ktag, m) then
+           event TagAccepted(m, t);
+           in(<'topology', g>);
+           let eg  = <'share', g, m> in
+           let rec = <g, eg> in
+           let mac = hmac(kchain, rec) in
+           event HostExported(g, eg, mac);
+           out(<'guest_record', rec, mac>)
+       else 0
+       else 0
+       else 0 )
+
+let GuestSpawn =
+    new g;
+    event GuestCreated(g);
+    out(<'guest_id', g>)
+
+let GuestVerification =
+    !( in(<'guest_record', <gr, eg>, mac>);
+       lookup 'k_chain' as kchain in
+         if mac = hmac(kchain, <gr, eg>) then
+           event GuestAccepted(gr, eg)
+       else 0 )
+
+process:
+    Provisioning | TPMProvision | TPMExtend | TPMQuote
+  | HostBoot | IMALogService | ReferenceRegister | EnclaveAdmission
+  | eBPFTag | MeasurementCollector | DataExporterRelay | EnclaveIngest
+  | !GuestSpawn | GuestVerification
+
+lemma platform_authenticity:
+  "All v logb #i.
+     BootAdmitted(v, logb) @ #i
+     ==> (Ex n #j. TPMQuoted(v, n) @ #j & #j < #i)
+       & (Ex #k. ReferenceStateFixed(v, logb) @ #k & #k < #i)"
+
+lemma exec_boot_admitted:
+  exists-trace
+  "Ex v logb #i. BootAdmitted(v, logb) @ #i"
+
+lemma host_to_guest_authentication:
+  "All g eg #i.
+     GuestAccepted(g, eg) @ #i
+     ==> Ex mac #j. HostExported(g, eg, mac) @ #j & #j < #i"
+
+lemma exec_guest_accepted:
+  exists-trace
+  "Ex g eg #i. GuestAccepted(g, eg) @ #i"
+
+end

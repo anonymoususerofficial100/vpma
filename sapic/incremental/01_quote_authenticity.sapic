@@ -1,0 +1,43 @@
+theory VPMA_01_QuoteAuthenticity
+begin
+
+builtins: signing
+
+let TPMProvision =
+    new aik;
+    insert 'aik_priv', aik;
+    insert 'aik_pub_pinned', pk(aik);
+    event TPMReady(pk(aik));
+    out(<'aik_pub', pk(aik)>)
+
+let TPMQuote =
+    !( in(<'quote_req', nonce>);
+       lookup 'aik_priv' as aik in
+         let quoted = <'quote', nonce> in
+         event TPMQuoted(nonce);
+         out(<quoted, sign(quoted, aik)>)
+       else 0 )
+
+let Verifier =
+    !( lookup 'aik_pub_pinned' as apk in
+         new n;
+         out(<'quote_req', n>);
+         in(<<'quote', nr>, sig>);
+         if nr = n then
+         if verify(sig, <'quote', nr>, apk) = true then
+           event QuoteAccepted(nr)
+       else 0 )
+
+process:
+    TPMProvision | TPMQuote | Verifier
+
+lemma quote_authenticity:
+  "All n #i.
+     QuoteAccepted(n) @ #i
+     ==> Ex #j. TPMQuoted(n) @ #j & #j < #i"
+
+lemma exec_quote_accepted:
+  exists-trace
+  "Ex n #i. QuoteAccepted(n) @ #i"
+
+end

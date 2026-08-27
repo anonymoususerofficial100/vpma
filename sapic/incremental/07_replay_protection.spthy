@@ -1,0 +1,72 @@
+theory VPMA_07_ReplayProtection
+begin
+
+builtins: hashing
+functions: hmac/2
+
+restriction Equality:
+    "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+rule Setup:
+    [ Fr(~kchain) ]
+  --[ SecretKey(~kchain) ]->
+    [ !ChainKey(~kchain) ]
+
+rule InitGuest:
+    [ Fr(~g) ]
+  --[ GuestCreated(~g) ]->
+    [ EState(~g, 'zero', 'zero'), GState(~g, 'zero', 'zero'), Out(~g) ]
+
+rule EnclaveStep:
+    let ci  = <'s', c>
+        eg  = <'share', g, ~m>
+        hi  = h(<hprev, eg>)
+        rec = <g, ci, eg, hi>
+    in
+    [ EState(g, c, hprev), Fr(~m), !ChainKey(k) ]
+  --[ ChainStep(g, ci, hprev, hi) ]->
+    [ EState(g, ci, hi), Out(<rec, hmac(k, rec)>) ]
+
+rule GuestAccept:
+    let rec = <g, ci, eg, hi> in
+    [ GState(g, c, gprev), In(<rec, mac>), !ChainKey(k) ]
+  --[ Eq(mac, hmac(k, rec))
+    , Eq(ci, <'s', c>)
+    , Eq(hi, h(<gprev, eg>))
+    , GuestAccepted(g, ci, gprev, hi)
+    , GuestStep(g, c, ci)
+    , GuestPos(g, gprev, hi) ]->
+    [ GState(g, ci, hi) ]
+
+lemma counter_consumed_once [use_induction, reuse]:
+  "All g c i1 i2 #i #j.
+       GuestStep(g, c, i1) @ #i
+     & GuestStep(g, c, i2) @ #j
+     ==> #i = #j"
+
+lemma replay_protection_counter:
+  "All g ci p1 p2 h1 h2 #i #j.
+       GuestAccepted(g, ci, p1, h1) @ #i
+     & GuestAccepted(g, ci, p2, h2) @ #j
+     ==> #i = #j"
+
+lemma position_consumed_once [use_induction, reuse]:
+  "All g p h1 h2 #i #j.
+       GuestPos(g, p, h1) @ #i
+     & GuestPos(g, p, h2) @ #j
+     ==> #i = #j"
+
+lemma replay_protection_position:
+  "All g p i1 i2 h1 h2 #i #j.
+       GuestAccepted(g, i1, p, h1) @ #i
+     & GuestAccepted(g, i2, p, h2) @ #j
+     ==> #i = #j"
+
+lemma exec_two_accepted:
+  exists-trace
+  "Ex g c0 c1 c2 #i #j.
+       GuestStep(g, c0, c1) @ #i
+     & GuestStep(g, c1, c2) @ #j
+     & #i < #j"
+
+end

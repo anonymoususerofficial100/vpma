@@ -1,0 +1,77 @@
+theory VPMA_13a_OriginPermissive
+begin
+
+builtins: hashing, signing
+functions: uhash/2, hmac/2
+
+restriction SetupOnce:
+    "All #i #j. Setup() @ #i & Setup() @ #j ==> #i = #j"
+
+restriction Equality:
+    "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+rule Setup:
+    [ Fr(~ktag), Fr(~kchain), Fr(~ska) ]
+  --[ Setup() ]->
+    [ !TagKey(~ktag), !ChainKey(~kchain)
+    , !AnchorSK(~ska), !AnchorPK(pk(~ska)), Out(pk(~ska)) ]
+
+rule Sense:
+    [ Fr(~m), !TagKey(kt) ]
+  --[ MeasurementGenerated(~m) ]->
+    [ Out(<~m, uhash(kt, ~m)>) ]
+
+rule TagCheck:
+    let rec = <g, m> in
+    [ In(<m, t>), In(g), !TagKey(kt), !ChainKey(kc) ]
+  --[ Eq(t, uhash(kt, m))
+    , TagAccepted(m) ]->
+    [ Out(<rec, hmac(kc, rec)>) ]
+
+rule GuestAccept:
+    let rec = <g, m> in
+    [ In(<rec, mac>), !ChainKey(kc) ]
+  --[ Eq(mac, hmac(kc, rec))
+    , GuestAccepted(g, m) ]->
+    [ ]
+
+rule Seal:
+    let a = <'anchor', bn, m> in
+    [ In(<bn, m>), !AnchorSK(sk) ]
+  --[ BlockSealed(bn, m) ]->
+    [ Out(<a, sign(a, sk)>) ]
+
+rule Audit:
+    [ In(<<'anchor', bn, m>, sig>), !AnchorPK(apk) ]
+  --[ Eq(verify(sig, <'anchor', bn, m>, apk), true)
+    , AuditVerified(bn, m) ]->
+    [ ]
+
+lemma tagged_implies_generated:
+  "All m #i.
+     TagAccepted(m) @ #i
+     ==> Ex #j. MeasurementGenerated(m) @ #j & #j < #i"
+
+lemma audit_implies_sealed:
+  "All bn m #i.
+     AuditVerified(bn, m) @ #i
+     ==> Ex #j. BlockSealed(bn, m) @ #j & #j < #i"
+
+lemma guest_implies_tagged:
+  "All g m #i.
+     GuestAccepted(g, m) @ #i
+     ==> Ex #j. TagAccepted(m) @ #j & #j < #i"
+
+lemma exec_tagged:
+  exists-trace
+  "Ex m #i. TagAccepted(m) @ #i"
+
+lemma exec_audited:
+  exists-trace
+  "Ex bn m #i. AuditVerified(bn, m) @ #i"
+
+lemma exec_guest_accepted:
+  exists-trace
+  "Ex g m #i. GuestAccepted(g, m) @ #i"
+
+end
