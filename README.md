@@ -54,7 +54,6 @@ bash scripts/register_hypervisor_hashes.sh    # host only: qemu + swtpm TCB hash
 
 ```bash
 sudo env TPM_PATH=/dev/shm/scaph_tpm IMMUDB_ADDR=127.0.0.1:8443 \
-  IMMUDB_CA_CERT=/path/to/immudb_ca.crt \
   SGX_ENCLAVE_PATH=$PWD/target/x86_64-fortanix-unknown-sgx/release/sgx.sgxs \
   ./target/x86_64-unknown-linux-gnu/release/scaphandre qemu
 ```
@@ -63,7 +62,7 @@ sudo env TPM_PATH=/dev/shm/scaph_tpm IMMUDB_ADDR=127.0.0.1:8443 \
 
 ```bash
 sudo env TPM_PATH=/dev/shm/scaph_tpm IMMUDB_ADDR=127.0.0.1:8443 \
-  IMMUDB_CA_CERT=/path/to/immudb_ca.crt REDIS_URL=redis://127.0.0.1:6379 \
+  REDIS_URL=redis://127.0.0.1:6379 \
   SGX_ENCLAVE_PATH=$PWD/target/x86_64-fortanix-unknown-sgx/release/sgx.sgxs \
   SGX_VM_ENCLAVE_PATH=$PWD/target/x86_64-fortanix-unknown-sgx/release/sgx_vm.sgxs \
   SCAPH_GPU_STEP_MS=500 ./target/release/scaphandre --sensor gpu gpu-db
