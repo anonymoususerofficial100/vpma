@@ -8,15 +8,13 @@ read host-measured energy over a 9p share and attest remotely.
 ## Prerequisites
 
 - Rust `nightly` + `stable`, both with the `x86_64-fortanix-unknown-sgx` target
-- SGX hardware + driver (`/dev/sgx_enclave` on FLC, or legacy `isgx` + `aesmd` on non-FLC)
+- SGX hardware + driver 
 - `fortanix-sgx-tools` + `sgxs-tools` (`cargo install`), `clang`/`llvm` + `libclang`, `cmake`
 - `libbpfcc-dev` (eBPF), `tpm2-tools`, `openssl`
-- Running **ImmuDB** (TLS, `127.0.0.1:8443`) for the hash registry; **Redis** (TLS, `:6379`) for the GPU block store
-- An enclave signing key: `openssl genrsa -3 -out ~/enclave-keys/enclave-signing.pem 3072`
+- Running **ImmuDB**  for the hash registry; **Redis**  for the  block store
+- An enclave signing key
 
-The enclaves and host embed TLS certs at compile time (`enclave_ca.pem`, `immudb_ca.pem`,
-`sgx*/enclave_{cert,key}.pem`). **Placeholder certs ship with the artifact — replace them with
-your own (matching your live ImmuDB/Redis) before building.**
+
 
 ## Build
 
@@ -37,14 +35,11 @@ cp target/x86_64-unknown-linux-gnu/release/scaphandre target/release/scaphandre
 make enclaves        # builds both, elf2sgxs, operator-signs -> sgx.sgxs / sgx_vm.sgxs (+ .sig)
 ```
 
-Adjust for your machine: `LIBCLANG_PATH` (default `llvm-14`), `SGX_HEAP_HOST` (must fit your EPC —
-the host verifier parses the full IMA log, so size accordingly), `SGX_SIGNING_KEY`. On a **non-FLC**
-CPU, debug-sign instead: `sgxs-sign -d --key <key> <name>.sgxs <name>.sig`.
+Adjust for your machine: `LIBCLANG_PATH` (default `llvm-14`), `SGX_HEAP_HOST` .
 
 ## Register (required — the enclave refuses an unregistered binary)
 
-The AK registry makes a signed TPM2 quote mandatory. Register the AK once, then the binary hash
-after **every** rebuild (the hash changes each time):
+The AK registry makes a signed TPM2 quote mandatory:
 
 ```bash
 export IMMUDB_ADDR=127.0.0.1:8443 COLLECTION_NAME=binary_hashes_v3 DEPLOYMENT_TYPE=host
@@ -53,7 +48,7 @@ bash scripts/register_binary_hash.sh          # reads ./target/release/scaphandr
 bash scripts/register_hypervisor_hashes.sh    # host only: qemu + swtpm TCB hashes
 ```
 
-## Run (needs root)
+## Run 
 
 **CPU — host:**
 
@@ -74,16 +69,14 @@ sudo env TPM_PATH=/dev/shm/scaph_tpm IMMUDB_ADDR=127.0.0.1:8443 \
   SCAPH_GPU_STEP_MS=500 ./target/release/scaphandre --sensor gpu gpu-db
 ```
 
-**Guest** (built on the host, copied into the VM; runs against the host's `sgx_vm` enclave in remote mode):
+**Guest**
 register with `scripts/register_guest_binary_hash.sh`, then run `scaphandre --vm db` (CPU) or
-`scaphandre --sensor gpu gpu-db` (GPU) with `IMMUDB_ADDR` pointing at the host.
+`scaphandre --sensor gpu gpu-db` (GPU) .
 
-A successful boot logs `Verification PASSED inside real SGX enclave` and then emits per-cycle
-`VM energy computed inside REAL SGX enclave` with an advancing chain counter.
+
 
 ## Offline verification
 
-Recorded energy blocks are re-checked out of the enclave using its own verified encoders:
 
 ```bash
 cargo build -p vpma-verified-ffi --release      # builds libvpma_ffi.so (required by the auditors)
