@@ -1,4 +1,4 @@
-# VPMA — Verifiable Power Metrics Architecture
+# VPMA: Verifiable Power Metrics Architecture
 
 A hardened Scaphandre fork: energy measurements are computed inside an SGX enclave,
 bound to a TPM2 quote + IMA binary-hash attestation, HMAC/Merkle chained, and stored
@@ -17,6 +17,12 @@ read host-measured energy over a 9p share and attest remotely.
 
 
 ## Build
+
+First generate the placeholder certs the enclaves embed at build time (replace with your own for a real deployment):
+
+```bash
+bash scripts/gen_certs.sh
+```
 
 **Host binary** (`build_cet.sh` takes the feature set):
 
@@ -37,7 +43,7 @@ make enclaves        # builds both, elf2sgxs, operator-signs -> sgx.sgxs / sgx_v
 
 Adjust for your machine: `LIBCLANG_PATH` (default `llvm-14`), `SGX_HEAP_HOST` .
 
-## Register (required — the enclave refuses an unregistered binary)
+## Register (required; the enclave refuses an unregistered binary)
 
 The AK registry makes a signed TPM2 quote mandatory:
 
