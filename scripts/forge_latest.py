@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""Adversarial demo for item 4: rewrite the latest GPU block CONSISTENTLY.
-
-Forges record[0]'s energy in the latest block and recomputes its leaf hash,
-merkle_root and chained_root so the internal auditors (verify_redis_data.py
---all / --chain, which rebuild from leaf hashes and check chained_root =
-SHA256(prev||merkle)) still PASS. This is what a thorough attacker who controls
-Redis can do. The chain-head anchor (gpu_checkpoint:<tenant>) is HMAC-signed by
-the enclave over the ORIGINAL chained_root, so anchor_verify.py detects the
-rewrite - the attacker cannot re-sign without the in-enclave master key.
-
-Usage: forge_latest.py <tenant>            # forge
-       forge_latest.py <tenant> restore    # restore from /tmp backup
-"""
 import subprocess, hashlib, sys, json, os
 
 RC = ["docker", "exec", "redis-sgx", "redis-cli", "--tls", "--cacert", "/certs/ca.crt",

@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""
-Redis Data Verification Script
-Verifies energy data cryptographically using Merkle tree reconstruction
-
-Usage:
-    ./verify_redis_data.py --block 1
-    ./verify_redis_data.py --date "2026-02-14"
-    ./verify_redis_data.py --all
-"""
 
 import argparse
 import hashlib
@@ -24,7 +15,6 @@ REDIS_CERT = "/home/user/redis-tls/server.crt"
 REDIS_KEY = "/home/user/redis-tls/server.key"
 
 class RedisClient:
-    """Simple Redis client with TLS support"""
 
     def __init__(self, host: str, port: int, ca_cert: str, cert: str, key: str,
                  user: Optional[str] = None, password: Optional[str] = None):
@@ -53,7 +43,6 @@ class RedisClient:
                 )
 
     def command(self, *args) -> Any:
-        """Send RESP command and get response"""
 
         cmd = f"*{len(args)}\r\n"
         for arg in args:
@@ -64,7 +53,6 @@ class RedisClient:
         return self._read_response()
 
     def _read_response(self) -> Any:
-        """Read RESP response"""
         line = self._read_line()
         resp_type = line[0]
         data = line[1:]
@@ -91,14 +79,12 @@ class RedisClient:
             raise Exception(f"Unknown response type: {resp_type}")
 
     def _read_line(self) -> str:
-        """Read until CRLF"""
         buf = b""
         while not buf.endswith(b"\r\n"):
             buf += self.sock.recv(1)
         return buf[:-2].decode()
 
     def _read_bytes(self, n: int) -> bytes:
-        """Read exactly n bytes"""
         buf = b""
         while len(buf) < n:
             buf += self.sock.recv(n - len(buf))
@@ -123,7 +109,6 @@ class RedisClient:
         return self.command("LINDEX", key, index)
 
     def hmget(self, key: str, *fields) -> List[str]:
-        """Get specific fields from hash - O(n) where n is number of fields"""
         result = self.command("HMGET", key, *fields)
         return result if result else []
 
@@ -134,8 +119,6 @@ import ctypes
 import os
 
 def _load_vpma():
-    """Locate libvpma_ffi.so, or fail loudly. Never silently fall back to a
-    Python reimplementation -- that is the drift this design removes."""
     env = os.environ.get("VPMA_FFI_LIB")
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.dirname(here)
@@ -193,7 +176,6 @@ DOMAIN_CHAIN     = _LIB.vpma_domain_chain()
 RECORD_FORMAT_V2 = _LIB.vpma_record_format_version()
 
 def sha256(data: bytes) -> bytes:
-    """SHA-256, via the shared library (same code path as the enclave)."""
     out = _buf(32)
     p, n = _in(data)
     if _LIB.vpma_sha256(p, n, _ptr(out)) != 32:
@@ -201,7 +183,6 @@ def sha256(data: bytes) -> bytes:
     return bytes(out)
 
 def encode_record(record: Dict[str, str]) -> bytes:
-    """`EnergyRecord::to_bytes` -- the verified encoding, called not copied."""
     vm = record['vm_name'].encode('utf-8')
     ts = record['timestamp'].encode('utf-8')
     cpu_bits    = struct.unpack('<Q', struct.pack('<d', float(record['cpu_time'])))[0]
@@ -218,7 +199,6 @@ def encode_record(record: Dict[str, str]) -> bytes:
     return bytes(out)[:n]
 
 def hash_leaf(record_bytes: bytes) -> bytes:
-    """SHA256(DOMAIN_LEAF || record_bytes) -- encoding from the verified code."""
     cap = 1 + len(record_bytes)
     enc = _buf(cap)
     p, n = _in(record_bytes)
@@ -228,7 +208,6 @@ def hash_leaf(record_bytes: bytes) -> bytes:
     return sha256(bytes(enc)[:m])
 
 def hash_pair(left: bytes, right: bytes) -> bytes:
-    """SHA256(DOMAIN_INTERNAL || left || right)."""
     enc = _buf(65)
     pl, _ = _in(left)
     pr, _ = _in(right)
@@ -238,7 +217,6 @@ def hash_pair(left: bytes, right: bytes) -> bytes:
     return sha256(bytes(enc)[:m])
 
 def commit_root(leaf_count: int, subtree_root: bytes) -> bytes:
-    """SHA256(DOMAIN_ROOT || leaf_count_le64 || subtree_root)."""
     enc = _buf(41)
     ps, _ = _in(subtree_root)
     m = _LIB.vpma_encode_root(leaf_count, ps, _ptr(enc), 41)
@@ -247,7 +225,6 @@ def commit_root(leaf_count: int, subtree_root: bytes) -> bytes:
     return sha256(bytes(enc)[:m])
 
 def compute_chained_root(prev: bytes, merkle_root: bytes) -> bytes:
-    """SHA256(DOMAIN_CHAIN || prev || merkle_root)."""
     enc = _buf(65)
     pp, _ = _in(prev)
     pm, _ = _in(merkle_root)
@@ -257,16 +234,6 @@ def compute_chained_root(prev: bytes, merkle_root: bytes) -> bytes:
     return sha256(bytes(enc)[:m])
 
 def build_merkle_tree(leaf_hashes: List[bytes]) -> Tuple[bytes, List]:
-    """
-    Committed Merkle root over pre-hashed leaves.
-
-    Forwards to `sgx_vm::merkle::compute_root_from_leaves`, so the odd-leaf
-    promotion rule and the leaf-count commitment are the enclave's, not a
-    Python restatement of them.
-
-    The second element is retained only because callers report
-    `len(levels)` as tree height; it carries no data.
-    """
     if not leaf_hashes:
         return bytes(32), []
     flat = b"".join(leaf_hashes)
@@ -281,11 +248,9 @@ def build_merkle_tree(leaf_hashes: List[bytes]) -> Tuple[bytes, List]:
     return bytes(out), [None] * (height + 1)
 
 def compute_leaf_hash(record: Dict[str, str]) -> bytes:
-    """Compute the domain-separated leaf hash for a record."""
     return hash_leaf(encode_record(record))
 
 def parse_record(record_str: str) -> Dict[str, str]:
-    """Parse record string: leaf_hash|pid|cpu_time|energy|power|vm_name|timestamp"""
     parts = record_str.split('|')
     return {
         'leaf_hash': parts[0],
@@ -298,10 +263,6 @@ def parse_record(record_str: str) -> Dict[str, str]:
     }
 
 def verify_block(redis: RedisClient, block_id: int) -> Tuple[bool, Dict[str, Any]]:
-    """
-    Verify a block's Merkle tree integrity
-    Returns (is_valid, details)
-    """
     start_time = time.time()
 
     block_key = f"block:{block_id}"
@@ -359,7 +320,6 @@ def verify_block(redis: RedisClient, block_id: int) -> Tuple[bool, Dict[str, Any
     }
 
 def verify_chain(redis: RedisClient) -> Tuple[bool, List[Dict[str, Any]]]:
-    """Verify the chain of blocks (chained roots)"""
     results = []
 
     block_keys = sorted([k for k in redis.keys("block:*")],
@@ -404,10 +364,6 @@ def verify_chain(redis: RedisClient) -> Tuple[bool, List[Dict[str, Any]]]:
     return True, results
 
 def calculate_proof_path_keys(record_idx: int, tree_height: int) -> List[Tuple[str, str]]:
-    """
-    Calculate the keys needed for merkle proof path.
-    Returns list of (sibling_key, self_key) tuples for HMGET.
-    """
     keys = []
     position = record_idx
 
@@ -425,10 +381,6 @@ def calculate_proof_path_keys(record_idx: int, tree_height: int) -> List[Tuple[s
     return keys
 
 def fetch_proof_nodes(redis: RedisClient, block_id: int, record_idx: int, tree_height: int) -> Dict[str, str]:
-    """
-    Fetch ONLY the O(log n) nodes needed for merkle proof using HMGET.
-    This is the key optimization - avoids fetching all nodes with HGETALL.
-    """
     path_keys = calculate_proof_path_keys(record_idx, tree_height)
 
     all_keys = []
@@ -449,16 +401,6 @@ def fetch_proof_nodes(redis: RedisClient, block_id: int, record_idx: int, tree_h
 def verify_record_logn_cached(redis: RedisClient, block_id: int, record_idx: int,
                               block_data: Dict[str, str] = None,
                               merkle_nodes: Dict[str, str] = None) -> Tuple[bool, Dict[str, Any]]:
-    """
-    Verify a single record using O(log n) Merkle proof with optional caching.
-
-    Instead of rebuilding the entire tree, we only fetch:
-    - The single record (1 item)
-    - log(n) sibling hashes from the merkle tree (using HMGET, not HGETALL)
-
-    If block_data and merkle_nodes are provided, they are reused (for batch verification).
-    This avoids redundant Redis calls when verifying multiple records from the same block.
-    """
     start_time = time.time()
     timing = {}
 
@@ -587,25 +529,10 @@ def verify_record_logn_cached(redis: RedisClient, block_id: int, record_idx: int
     }
 
 def verify_record_logn(redis: RedisClient, block_id: int, record_idx: int) -> Tuple[bool, Dict[str, Any]]:
-    """Wrapper for backward compatibility - calls cached version without cache."""
     return verify_record_logn_cached(redis, block_id, record_idx, None, None)
 
 def verify_block_records_collective(redis: RedisClient, block_id: int,
                                      target_indices: List[int] = None) -> Tuple[bool, Dict[str, Any]]:
-    """
-    Verify records COLLECTIVELY by rebuilding the full Merkle tree ONCE.
-
-    This is O(n) for the block but more efficient than doing m x O(log n)
-    individual proofs when verifying many records in the same block.
-
-    Args:
-        redis: Redis client
-        block_id: Block ID to verify
-        target_indices: Optional list of specific record indices to verify.
-                       If None, verifies all records.
-
-    Returns: (all_valid, details)
-    """
     start_time = time.time()
     timing = {}
 
@@ -676,17 +603,6 @@ def verify_block_records_collective(redis: RedisClient, block_id: int,
     }
 
 def verify_records_batch(redis: RedisClient, records: list, use_collective: bool = True) -> Tuple[int, int, list, float]:
-    """
-    Verify multiple records efficiently.
-
-    If use_collective=True (default), uses collective verification:
-    - Rebuilds Merkle tree ONCE per block (O(n) per block)
-    - More efficient when verifying many records from same block
-
-    If use_collective=False, uses individual O(log n) proofs with caching.
-
-    Returns: (verified_count, failed_count, failed_records, total_time_ms)
-    """
     start_time = time.time()
 
     records_by_block = {}
@@ -739,10 +655,6 @@ def verify_records_batch(redis: RedisClient, records: list, use_collective: bool
     return verified_count, failed_count, failed_records, total_time
 
 def verify_chain_to_block(redis: RedisClient, target_block: int) -> Tuple[bool, Dict[str, Any]]:
-    """
-    Verify the hash chain from genesis up to and including target_block.
-    Returns (is_valid, {blocks_verified, chain_details}).
-    """
     start_time = time.time()
     chain_details = []
 
@@ -801,13 +713,6 @@ def verify_chain_to_block(redis: RedisClient, target_block: int) -> Tuple[bool, 
     }
 
 def verify_record_full(redis: RedisClient, block_id: int, record_idx: int) -> Tuple[bool, Dict[str, Any]]:
-    """
-    Full verification of a record:
-    1. Verify hash chain from genesis to the block (proves block root authenticity)
-    2. Verify Merkle proof (proves record is in the block)
-
-    This is the complete verification that guarantees data integrity.
-    """
     start_time = time.time()
 
     chain_valid, chain_result = verify_chain_to_block(redis, block_id)
@@ -841,7 +746,6 @@ def verify_record_full(redis: RedisClient, block_id: int, record_idx: int) -> Tu
     }
 
 def find_blocks_by_date(redis: RedisClient, date_str: str) -> List[int]:
-    """Find blocks containing records from a specific date"""
     matching_blocks = []
 
     block_keys = redis.keys("block:*")
@@ -858,10 +762,6 @@ def find_blocks_by_date(redis: RedisClient, date_str: str) -> List[int]:
     return sorted(matching_blocks)
 
 def find_records_by_date(redis: RedisClient, date_str: str) -> List[Dict[str, Any]]:
-    """
-    Find all records matching a date string.
-    Returns list of dicts: {block_id, record_index, record_data}
-    """
     matching_records = []
 
     block_keys = redis.keys("block:*")
@@ -884,7 +784,6 @@ def find_records_by_date(redis: RedisClient, date_str: str) -> List[Dict[str, An
     return matching_records
 
 def parse_timestamp(ts_str: str) -> Optional[float]:
-    """Parse timestamp string to Unix timestamp. Returns None if invalid."""
     from datetime import datetime
     formats = [
         "%Y-%m-%d %H:%M:%S",
@@ -901,13 +800,6 @@ def parse_timestamp(ts_str: str) -> Optional[float]:
     return None
 
 def find_records_by_date_range(redis: RedisClient, start_time: str, end_time: str) -> List[Dict[str, Any]]:
-    """
-    Find all records within a date/time range.
-    Args:
-        start_time: Start datetime (e.g., "2026-02-14 00:00:00")
-        end_time: End datetime (e.g., "2026-02-14 23:59:59")
-    Returns list of dicts: {block_id, record_index, record_data}
-    """
     matching_records = []
 
     start_ts = parse_timestamp(start_time)
@@ -938,10 +830,6 @@ def find_records_by_date_range(redis: RedisClient, start_time: str, end_time: st
     return matching_records
 
 def find_block_for_index(redis: RedisClient, global_index: int) -> Tuple[int, int, int]:
-    """
-    Find which block contains a global record index.
-    Returns: (block_id, record_index_within_block, total_records)
-    """
     block_keys = sorted(redis.keys("block:*"), key=lambda k: int(k.split(':')[1]))
 
     cumulative = 0
@@ -1275,7 +1163,6 @@ def main():
         redis.close()
 
 def print_verification_result(is_valid: bool, details: Dict[str, Any], compact: bool = False):
-    """Print verification result"""
     if "error" in details:
         print(f"[FAIL] Error: {details['error']}")
         return
@@ -1304,7 +1191,6 @@ def print_verification_result(is_valid: bool, details: Dict[str, Any], compact: 
         print(f"      TOTAL:         {timing.get('total_ms', 0):.2f}ms")
 
 def print_record_verification_result(is_valid: bool, details: Dict[str, Any]):
-    """Print O(log n) record verification result"""
     if "error" in details:
         print(f"[FAIL] Error: {details['error']}")
         return
@@ -1349,7 +1235,6 @@ def print_record_verification_result(is_valid: bool, details: Dict[str, Any]):
     print(f"      Data reduction:   {details['record_count'] / (1 + details['proof_length']):.1f}x less data")
 
 def print_full_verification_result(is_valid: bool, details: Dict[str, Any]):
-    """Print full verification result (chain + Merkle proof)"""
     if "error" in details:
         print(f"[FAIL] Error: {details['error']}")
         chain_info = details.get('chain_verification', {})

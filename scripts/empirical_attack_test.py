@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""
-Empirical Security Testing for Scaphandre VPMA
-==============================================
-
-Runs automated attack trials and measures detection rates.
-Generates statistical evidence for security guarantees.
-
-Usage:
-    sudo python3 empirical_attack_test.py --trials 100
-"""
 
 import subprocess
 import os
@@ -33,7 +23,6 @@ RESULTS_DIR = Path("/tmp/security_empirical_results")
 
 @dataclass
 class AttackResult:
-    """Result of a single attack trial"""
     attack_type: str
     trial_num: int
     detected: bool
@@ -43,7 +32,6 @@ class AttackResult:
 
 @dataclass
 class AttackStatistics:
-    """Statistical summary for an attack type"""
     attack_type: str
     total_trials: int
     detections: int
@@ -55,7 +43,6 @@ class AttackStatistics:
     errors: int
 
 class ChainState:
-    """Manages chain state files for attack simulation"""
 
     def __init__(self, vm_dir: Optional[Path] = None, vm_ip: Optional[str] = None, vm_user: str = "user"):
         self.vm_ip = vm_ip
@@ -108,7 +95,6 @@ class ChainState:
         path.write_text(str(value))
 
     def read(self) -> Dict:
-        """Read current chain state"""
         state = {}
         files = ['chain_counter', 'chain_signature', 'chain_previous_hash',
                  'energy_uj', 'chain_energy_delta', 'name']
@@ -120,12 +106,10 @@ class ChainState:
         return state
 
     def write(self, key: str, value: str):
-        """Write a chain state file"""
         path = self.vm_dir / key
         self._write_file(path, str(value))
 
     def backup(self):
-        """Backup current state"""
         state = self.read()
         backup_file = self.backup_dir / f"backup_{int(time.time())}.json"
         with open(backup_file, 'w') as f:
@@ -133,12 +117,10 @@ class ChainState:
         return state
 
     def restore(self, state: Dict):
-        """Restore backed up state"""
         for key, value in state.items():
             self.write(key, value)
 
 class AttackSimulator:
-    """Simulates various attacks and measures detection"""
 
     def __init__(self, chain: ChainState, vm_ip: str = VM_IP):
         self.chain = chain
@@ -147,13 +129,11 @@ class AttackSimulator:
         self.vm_log = Path("scaphandre-vmclient.log")
 
     def get_log_size(self) -> int:
-        """Get current size of VM client log"""
         if self.vm_log.exists():
             return self.vm_log.stat().st_size
         return 0
 
     def get_new_log_lines(self, prev_size: int) -> str:
-        """Get new lines added to log since prev_size"""
         if not self.vm_log.exists():
             return ""
         with open(self.vm_log, 'r') as f:
@@ -161,7 +141,6 @@ class AttackSimulator:
             return f.read()
 
     def run_vm_verification(self, timeout: int = 5) -> tuple:
-        """Monitor running VM logs for detection after tampering"""
         start = time.time()
         prev_size = self.get_log_size()
 
@@ -172,7 +151,6 @@ class AttackSimulator:
         return new_output, elapsed_ms
 
     def check_detection(self, output: str, attack_type: str) -> tuple:
-        """Check if attack was detected in output"""
         detection_patterns = {
             'rapl_injection': ['signature mismatch', 'Chain verification failed', 'tampering'],
             'replay': ['counter discontinuity', 'Same counter', 'Chain verification failed'],
@@ -189,7 +167,6 @@ class AttackSimulator:
         return False, ""
 
     def attack_rapl_injection(self, trial: int) -> AttackResult:
-        """Inject fake energy value without updating signature"""
         orig_state = self.chain.backup()
 
         try:
@@ -225,7 +202,6 @@ class AttackSimulator:
             self.chain.restore(orig_state)
 
     def attack_replay(self, trial: int) -> AttackResult:
-        """Replay old counter value"""
         orig_state = self.chain.backup()
 
         try:
@@ -261,7 +237,6 @@ class AttackSimulator:
             self.chain.restore(orig_state)
 
     def attack_rollback(self, trial: int) -> AttackResult:
-        """Roll back counter to earlier value"""
         orig_state = self.chain.backup()
 
         try:
@@ -293,7 +268,6 @@ class AttackSimulator:
             self.chain.restore(orig_state)
 
     def attack_fork(self, trial: int) -> AttackResult:
-        """Provide forked chain with different previous hash"""
         orig_state = self.chain.backup()
 
         try:
@@ -330,7 +304,6 @@ class AttackSimulator:
             self.chain.restore(orig_state)
 
     def attack_signature_forgery(self, trial: int) -> AttackResult:
-        """Attempt to forge signature without knowing the key"""
         orig_state = self.chain.backup()
 
         try:
@@ -365,7 +338,6 @@ class AttackSimulator:
             self.chain.restore(orig_state)
 
 def compute_statistics(results: List[AttackResult]) -> Dict[str, AttackStatistics]:
-    """Compute statistics for each attack type"""
     from collections import defaultdict
 
     by_type = defaultdict(list)
@@ -396,7 +368,6 @@ def compute_statistics(results: List[AttackResult]) -> Dict[str, AttackStatistic
     return stats
 
 def print_report(stats: Dict[str, AttackStatistics], output_file: Optional[Path] = None):
-    """Print formatted report"""
     lines = []
 
     lines.append("\n" + "=" * 80)

@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""Item 4 - chain-head anchor auditor (GPU secure storage).
-
-The SGX enclave HMAC-signs {tenant, block_number, chained_root} after each block
-flush and stores it as Redis key `gpu_checkpoint:<tenant>`. An attacker who
-rewrites every Redis block (recomputing merkle + chained roots consistently) can
-satisfy the internal --chain check, but cannot re-sign the anchor without the
-in-enclave master key, so the rewritten chain head won't match the signed anchor.
-
-This auditor (run outside the enclave) verifies:
-  1. the anchor signature (proves the enclave signed it),
-  2. the anchored chained_root == the Redis block of that block_number,
-  3. that block is the latest head for the tenant.
-It FAILS CLOSED if the anchor is missing/invalid.
-"""
 import subprocess, hmac, hashlib, sys
 
 import os as _os
