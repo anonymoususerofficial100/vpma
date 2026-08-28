@@ -1,4 +1,6 @@
 #!/bin/bash
+# Live attack demonstration against the secure pipeline (tamper -> detection).
+# Set SCAPHANDRE_DIR / VM_IP / VM_USER below for your host + guest setup.
 
 set -e
 
