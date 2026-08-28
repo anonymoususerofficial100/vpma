@@ -1,4 +1,6 @@
 #!/bin/bash
+# Power-draw overhead: secure vs basic scaphandre. Install vanilla scaphandre
+# (github.com/hubblo-org/scaphandre) and point VANILLA_BIN / SECURE_BIN below at the two binaries.
 
 DURATION=180
 ITERATIONS=5
