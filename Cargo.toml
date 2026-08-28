@@ -10,7 +10,7 @@ readme = "README.md"
 homepage = "https://scaphandre.hubblo.org"
 
 [workspace]
-members = [".", "loader", "sgx", "sgx_vm", "verified", "verified-ffi"]
+members = [".", "sgx", "sgx_vm", "verified", "verified-ffi"]
 exclude = ["third_party/verus"]
 
 [dependencies]
