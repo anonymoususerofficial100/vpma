@@ -91,9 +91,7 @@ python3 scripts/anchor_verify.py <tenant>       # verify the enclave-signed chai
 
 ## Benchmark
 
-Install Phoronix Test Suite and run the CPU/storage/network campaign (re-run with a different
-identifier to compare, e.g. `host-secure` vs `host-insecure`):
-
+Install Phoronix Test Suite and run the CPU/storage/network campaign:
 ```bash
 scripts/run_phoronix.sh host-secure vpma-bench
 phoronix-test-suite show-result vpma-bench
