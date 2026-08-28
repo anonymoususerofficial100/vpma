@@ -32,11 +32,3 @@ crate-type = ["rlib"]
 [[bin]]
 name = "sgx"
 path = "src/main.rs"
-
-[[bin]]
-name = "sgx_simple"
-path = "src/main_simple.rs"
-
-[[bin]]
-name = "test_enclave"
-path = "src/bin/test_enclave.rs"
